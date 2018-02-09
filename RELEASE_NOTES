@@ -2,6 +2,9 @@
 # SLAC RELEASE_NOTES
 #
 
+R1.0.0-0.2.0	2018-02-09	bhill
+	Updated to pvAccessCPP/R6.0.0-0.2.0 for crash fixes
+
 R1.0.0-0.0.1	2018-01-18	bhill
 	Release of 1.0.0 w/ SLAC build support
 

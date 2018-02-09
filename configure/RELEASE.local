@@ -13,43 +13,22 @@
 
 # ==========================================================
 # Define the version strings for all needed modules
-# Use naming pattern:
-#   FOO_MODULE_VERSION = R1.2
-# so scripts can extract version strings
-# Don't set your version to anything such as "test" that
-# could match a directory name.
 # ==========================================================
-<<<<<<< HEAD
-PVACCESS_MODULE_VERSION         = R6.0.0-0.0.1
+PVACCESS_MODULE_VERSION         = R6.0.0-0.2.0
 PVDATA_MODULE_VERSION           = R7.0.0-0.0.1
-=======
-PVACCESS_MODULE_VERSION         = R5.0.0-0.2.1
-PVDATA_MODULE_VERSION           = R6.0.0-0.3.0
->>>>>>> 2e44779... Added SLAC RELEASE.local
-#PVDATABASE_MODULE_VERSION       = R4.2.0-0.1.1
-#NORMATIVETYPES_MODULE_VERSION   = R5.1.0-0.1.0
 
 # ==========================================================
 # External Support module path definitions
-#
-# If any of these macros expand to a path which
-# contains an "include" directory, that directory will be
-# included in the compiler include path.
-#
-# If any of these macros expand to a path which
-# contains a "lib/<arch>" directory, that directory will be
-# included in the compiler link path for that architecture.
-#
-# If your build fails, look for these paths in your build output
 # ==========================================================
 PVACCESS        = $(EPICS_MODULES)/pvAccessCPP/$(PVACCESS_MODULE_VERSION)
 PVDATA          = $(EPICS_MODULES)/pvDataCPP/$(PVDATA_MODULE_VERSION)
-#PVDATABASE      = $(EPICS_MODULES)/pvDatabaseCPP/$(PVDATABASE_MODULE_VERSION)
-#NORMATIVETYPES  = $(EPICS_MODULES)/normativeTypesCPP/$(NORMATIVETYPES_MODULE_VERSION)
 
 # Set EPICS_BASE last so it appears last in the DB, DBD, INCLUDE, and LIB search paths
 EPICS_BASE = $(EPICS_SITE_TOP)/base/$(BASE_MODULE_VERSION)
 
 # Check for invalid or undefined EPICS_BASE
 -include $(TOP)/../../EPICS_BASE.check
+
+#MY_MODULES = /afs/slac/u/ey/bhill/git-wa/modules
+#PVACCESS   = $(MY_MODULES)/pvAccessCPP-git
 
