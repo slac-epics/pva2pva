@@ -30,5 +30,6 @@ EPICS_BASE = $(EPICS_SITE_TOP)/base/$(BASE_MODULE_VERSION)
 -include $(TOP)/../../EPICS_BASE.check
 
 #MY_MODULES = /afs/slac/u/ey/bhill/git-wa/modules
+#MY_MODULES = /reg/neh/home/bhill/git-wa-neh/modules
 #PVACCESS   = $(MY_MODULES)/pvAccessCPP-git
 
