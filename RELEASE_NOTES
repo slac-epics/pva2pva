@@ -2,11 +2,16 @@
 # SLAC RELEASE_NOTES
 #
 
+R1.0.0-0.3.1	2018-02-27	bhill
+	Updated to pvAccessCPP/R6.0.0-0.3.0 for fairQueue logic fix
+
 R1.0.0-0.3.0	2018-02-09	bhill
 	Included pdb monitor locking fix from Michael Davidsaver
 
 R1.0.0-0.2.0	2018-02-09	bhill
 	Updated to pvAccessCPP/R6.0.0-0.2.0 for crash fixes
+	eliminate seperate mutex for BaseMonitor
+	fixup dllimport/export
 
 R1.0.0-0.0.1	2018-01-18	bhill
 	Release of 1.0.0 w/ SLAC build support
