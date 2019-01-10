@@ -1,3 +1,5 @@
+See main [documentation](https://epics-base.github.io/pva2pva/) page.
+
 This repository contains two distinct pieces of software.
 
 QSRV
@@ -23,8 +25,13 @@ Dependencies
 ------------
 
 - [epics-base](http://www.aps.anl.gov/epics/) >= 3.15.3
+- and
 - [pvDataCPP](http://epics-pvdata.sourceforge.net/)
 - [pvAccessCPP](http://epics-pvdata.sourceforge.net/)
+
+or bundled with
+
+- [epics-base](http://www.aps.anl.gov/epics/) >= 7.0.1
 
 Building
 --------
@@ -32,15 +39,8 @@ Building
 To build all dependencies from source:
 
 ```sh
-git clone https://github.com/epics-base/epics-base.git
-git clone https://github.com/epics-base/pvDataCPP.git
-git clone https://github.com/epics-base/pvAccessCPP.git
-git clone https://github.com/mdavidsaver/pva2pva.git
-
+git clone --recursive https://github.com/epics-base/epics-base.git
 make -C epics-base
-make -C pvDataCPP
-make -C pvAccessCPP
-make -C pva2pva
 ```
 
 Running QSRV
@@ -86,15 +86,15 @@ A full list of `info(Q:group` options.
 record(...) {
     info(Q:group, {
         "<group_name>":{
-            +id:"some/NT:1.0",  // top level ID
-            +meta:"FLD",        // map top level alarm/timeStamp
-            +atomic:true,       // whether monitors default to multi-locking atomicity
+            +id:"some/NT:1.0",  # top level ID
+            +meta:"FLD",        # map top level alarm/timeStamp
+            +atomic:true,       # whether monitors default to multi-locking atomicity
             "<field.name>":{
-                +type:"scalar", // controls how map VAL mapped onto <field.name>
+                +type:"scalar", # controls how map VAL mapped onto <field.name>
                 +channel:"VAL",
                 +id:"some/NT:1.0",
-                +trigger:"*",   // "*" or comma seperated list of <field.name>s
-                +putorder:0,    // set for fields where put is allowed, processing done in increasing order
+                +trigger:"*",   # "*" or comma seperated list of <field.name>s
+                +putorder:0,    # set for fields where put is allowed, processing done in increasing order
             }
         }
     })
@@ -109,9 +109,7 @@ At present each pva2pva process can act as a uni-directional proxy,
 presenting a pvAccess server on one interface,
 and a client on other(s).
 
-The file [example.cmd](example.cmd) provides a starting point.
-Adjust *EPICS_PVAS_INTF_ADDR_LIST* and *EPICS_PVA_ADDR_LIST*
-according to the host computer's network configuration.
+The file [loopback.conf](loopback.conf) provides a starting point.
 
 At present there are no safe guard against creating loops
 where a gateway client side connects to its own server side.
@@ -121,5 +119,5 @@ the interface used for the server (either directly, or included in a broadcast d
 
 ```
 cd pva2pva
-./bin/linux-x86_64/pva2pva example.cmd
+./bin/linux-x86_64/pva2pva loopback.conf
 ```

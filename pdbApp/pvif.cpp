@@ -19,6 +19,7 @@
 #include <pv/reftrack.h>
 
 #define epicsExportSharedSymbols
+#include "sb.h"
 #include "pvif.h"
 
 #include <epicsExport.h>
@@ -26,6 +27,8 @@
 #ifdef EPICS_VERSION_INT
 #  if EPICS_VERSION_INT>=VERSION_INT(3,16,1,0)
 #    define USE_INT64
+     // effects all uses of pv/typemap.h
+#    define CASE_REAL_INT64
 #  endif
 #endif
 
@@ -37,33 +40,22 @@ namespace pvd = epics::pvData;
 
 DBCH::DBCH(dbChannel *ch) :chan(ch)
 {
-    if(dbChannelOpen(chan)) {
-        dbChannelDelete(chan);
-        throw std::invalid_argument("Failed to open channel");
-    }
-    if(!chan)
-        throw std::invalid_argument(std::string("Invalid channel ")+dbChannelName(ch));
+    prepare();
 }
 
 DBCH::DBCH(const std::string& name)
     :chan(dbChannelCreate(name.c_str()))
 {
-    if(!chan)
-        throw std::invalid_argument("Invalid channel");
-    if(dbChannelOpen(chan)) {
-        dbChannelDelete(chan);
-        throw std::invalid_argument("Failed to open channel "+name);
-    }
+    prepare();
 }
 
-DBCH::DBCH(const char *name)
-    :chan(dbChannelCreate(name))
+void DBCH::prepare()
 {
     if(!chan)
-        throw std::invalid_argument("Invalid channel");
+        throw std::invalid_argument("NULL channel");
     if(dbChannelOpen(chan)) {
         dbChannelDelete(chan);
-        throw std::invalid_argument(std::string("Failed to open channel ")+name);
+        throw std::invalid_argument(SB()<<"Failed to open channel "<<dbChannelName(chan));
     }
 }
 
@@ -269,6 +261,18 @@ void mapStatus(unsigned code, pvd::PVInt* status, pvd::PVString* message)
     status->put(out);
 }
 
+
+template<typename META>
+void putMetaImpl(const pvTimeAlarm& pv, const META& meta)
+{
+    pvd::int32 nsec = meta.time.nsec;
+    if(pv.nsecMask) {
+        pv.userTag->put(nsec&pv.nsecMask);
+        nsec &= ~pv.nsecMask;
+    }
+    pv.nsec->put(nsec);    pv.sec->put(meta.time.secPastEpoch+POSIX_TIME_AT_EPICS_EPOCH);
+}
+
 void putTime(const pvTimeAlarm& pv, unsigned dbe, db_field_log *pfl)
 {
     metaTIME meta;
@@ -278,12 +282,7 @@ void putTime(const pvTimeAlarm& pv, unsigned dbe, db_field_log *pfl)
     if(status)
         throw std::runtime_error("dbGet for meta fails");
 
-    pvd::int32 nsec = meta.time.nsec;
-    if(pv.nsecMask) {
-        pv.userTag->put(nsec&pv.nsecMask);
-        nsec &= ~pv.nsecMask;
-    }
-    pv.nsec->put(nsec);    pv.sec->put(meta.time.secPastEpoch+POSIX_TIME_AT_EPICS_EPOCH);
+    putMetaImpl(pv, meta);
     if(dbe&DBE_ALARM) {
         mapStatus(meta.status, pv.status.get(), pv.message.get());
         pv.severity->put(meta.severity);
@@ -298,6 +297,11 @@ void putValue(dbChannel *chan, pvd::PVScalar* value, db_field_log *pfl)
     long status = dbChannelGet(chan, dbChannelFinalFieldType(chan), &buf, NULL, &nReq, pfl);
     if(status)
         throw std::runtime_error("dbGet for meta fails");
+
+    if(nReq==0) {
+        // this was an actual max length 1 array, which has zero elements now.
+        memset(&buf, 0, sizeof(buf));
+    }
 
     switch(dbChannelFinalFieldType(chan)) {
 #define CASE(BASETYPE, PVATYPE, DBFTYPE, PVACODE) case DBR_##DBFTYPE: value->putFrom<PVATYPE>(buf.dbf_##DBFTYPE); break;
@@ -412,7 +416,6 @@ void putValue(dbChannel *chan, pvd::PVScalarArray* value, db_field_log *pfl)
         value->putFrom(pvd::freeze(buf));
     }
 }
-
 template<typename META>
 void putMeta(const pvCommon& pv, unsigned dbe, db_field_log *pfl)
 {
@@ -424,14 +427,8 @@ void putMeta(const pvCommon& pv, unsigned dbe, db_field_log *pfl)
     if(status)
         throw std::runtime_error("dbGet for meta fails");
 
-    pvd::int32 nsec = meta.time.nsec;
-    if(pv.nsecMask) {
-        pv.userTag->put(nsec&pv.nsecMask);
-        nsec &= ~pv.nsecMask;
-    }
-    pv.nsec->put(nsec);
+    putMetaImpl(pv, meta);
 #define FMAP(MNAME, FNAME) pv.MNAME->put(meta.FNAME)
-    FMAP(sec, time.secPastEpoch+POSIX_TIME_AT_EPICS_EPOCH);
     if(dbe&DBE_ALARM) {
         mapStatus(meta.status, pv.status.get(), pv.message.get());
         FMAP(severity, severity);
@@ -539,6 +536,7 @@ void findNSMask(pvTimeAlarm& pvmeta, dbChannel *chan, const epics::pvData::PVStr
         try{
             pvmeta.nsecMask = epics::pvData::castUnsafe<pvd::uint32>(std::string(&UT[9]));
         }catch(std::exception& e){
+            pvmeta.nsecMask = 0;
             std::cerr<<dbChannelRecord(chan)->name<<" : Q:time:tag nsec:lsb: requires a number not '"<<UT[9]<<"'\n";
         }
     }
@@ -610,8 +608,11 @@ struct PVIFScalarNumeric : public PVIF
     virtual pvd::Status get(const epics::pvData::BitSet& mask, proc_t proc) OVERRIDE FINAL
     {
         pvd::Status ret;
-        if(mask.logical_and(pvmeta.maskVALUEPut)) {
+        bool newval = mask.logical_and(pvmeta.maskVALUEPut);
+        if(newval) {
             getValue(pvmeta.chan, pvmeta.value.get());
+        }
+        if(newval || proc==PVIF::ProcForce) {
             ret = PVIF::get(mask, proc);
         }
         return ret;
@@ -632,6 +633,7 @@ struct PVIFScalarNumeric : public PVIF
 
 } // namespace
 
+static
 pvd::ScalarType DBR2PVD(short dbr)
 {
     switch(dbr) {
@@ -643,22 +645,25 @@ pvd::ScalarType DBR2PVD(short dbr)
 #undef CASE_SKIP_BOOL
 #undef CASE
     case DBF_STRING: return pvd::pvString;
-    default:
-        throw std::invalid_argument("Unsupported DBR code");
     }
+    throw std::invalid_argument("Unsupported DBR code");
 }
 
 short PVD2DBR(pvd::ScalarType pvt)
 {
     switch(pvt) {
 #define CASE(BASETYPE, PVATYPE, DBFTYPE, PVACODE) case pvd::pv##PVACODE: return DBR_##DBFTYPE;
-#define CASE_SQUEEZE_INT64
+#ifndef USE_INT64
+#  define CASE_SQUEEZE_INT64
+#endif
 #include "pv/typemap.h"
-#undef CASE_SQUEEZE_INT64
+#ifndef USE_INT64
+#  undef CASE_SQUEEZE_INT64
+#endif
 #undef CASE
-    default:
-        throw std::invalid_argument("Unsupported pvType code");
+    case pvd::pvString: return DBF_STRING;
     }
+    return -1;
 }
 
 epics::pvData::FieldConstPtr
@@ -709,6 +714,10 @@ ScalarBuilder::attach(dbChannel *channel, const epics::pvData::PVStructurePtr& r
         case DBR_USHORT:
         case DBR_LONG:
         case DBR_ULONG:
+#ifdef USE_INT64
+        case DBR_INT64:
+        case DBR_UINT64:
+#endif
             return new PVIFScalarNumeric<pvScalar, metaDOUBLE>(channel, fld, enclosing);
         case DBR_FLOAT:
         case DBR_DOUBLE:
@@ -729,6 +738,10 @@ ScalarBuilder::attach(dbChannel *channel, const epics::pvData::PVStructurePtr& r
         case DBR_ULONG:
         case DBR_STRING:
         case DBR_FLOAT:
+#ifdef USE_INT64
+        case DBR_INT64:
+        case DBR_UINT64:
+#endif
         case DBR_DOUBLE:
             return new PVIFScalarNumeric<pvArray, metaDOUBLE>(channel, fld, enclosing);
         }
@@ -771,8 +784,11 @@ struct PVIFPlain : public PVIF
     virtual pvd::Status get(const epics::pvData::BitSet& mask, proc_t proc)
     {
         pvd::Status ret;
-        if(mask.get(fieldOffset)) {
+        bool newval = mask.get(fieldOffset);
+        if(newval) {
             getValue(channel, field.get());
+        }
+        if(newval || proc==PVIF::ProcForce) {
             ret = PVIF::get(mask, proc);
         }
         return ret;

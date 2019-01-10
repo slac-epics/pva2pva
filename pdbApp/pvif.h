@@ -29,8 +29,18 @@
 #  define USE_MULTILOCK
 #endif
 
-epics::pvData::ScalarType DBR2PVD(short dbr);
 short PVD2DBR(epics::pvData::ScalarType pvt);
+
+// copy from PVField (.value sub-field) to DBF buffer
+epicsShareExtern
+long copyPVD2DBF(const epics::pvData::PVField::const_shared_pointer& in,
+                 void *outbuf, short outdbf, long *outnReq);
+// copy from DBF buffer to PVField (.value sub-field)
+epicsShareExtern
+long copyDBF2PVD(const epics::pvData::shared_vector<const void>& buf,
+                 const epics::pvData::PVField::shared_pointer& out,
+                 epics::pvData::BitSet &changed,
+                 const epics::pvData::PVStringArray::const_svector& choices);
 
 union dbrbuf {
         epicsInt8		dbf_CHAR;
@@ -42,6 +52,13 @@ union dbrbuf {
         epicsUInt32		dbf_ULONG;
         epicsFloat32	dbf_FLOAT;
         epicsFloat64    dbf_DOUBLE;
+
+#ifdef EPICS_VERSION_INT
+#  if EPICS_VERSION_INT>=VERSION_INT(3,16,1,0)
+        epicsInt64      dbf_INT64;
+        epicsUInt64     dbf_UINT64;
+#  endif
+#endif
         char		dbf_STRING[MAX_STRING_SIZE];
 };
 
@@ -50,7 +67,6 @@ struct epicsShareClass DBCH {
     DBCH() :chan(0) {}
     explicit DBCH(dbChannel *ch); // calls dbChannelOpen()
     explicit DBCH(const std::string& name);
-    explicit DBCH(const char *name);
     ~DBCH();
 
     void swap(DBCH&);
@@ -62,6 +78,7 @@ struct epicsShareClass DBCH {
 private:
     DBCH(const DBCH&);
     DBCH& operator=(const DBCH&);
+    void prepare();
 };
 
 struct pdbRecordInfo {
@@ -100,11 +117,22 @@ struct pdbRecordIterator {
     }
     pdbRecordIterator(const dbChannel *chan)
     {
+#if EPICS_VERSION_INT>=VERSION_INT(3,16,1,0)
+        dbInitEntryFromRecord(dbChannelRecord(chan), &ent);
+#else
         dbInitEntry(pdbbase, &ent);
         if(dbFindRecord(&ent, dbChannelRecord(chan)->name)!=0)
-            throw std::runtime_error("Record not found");
+            throw std::logic_error("Record not found");
+#endif
         m_done = false;
     }
+#if EPICS_VERSION_INT>=VERSION_INT(3,16,1,0)
+    pdbRecordIterator(dbCommon *prec)
+    {
+        dbInitEntryFromRecord(prec, &ent);
+        m_done = false;
+    }
+#endif
     ~pdbRecordIterator()
     {
         dbFinishEntry(&ent);
@@ -128,7 +156,7 @@ struct pdbRecordIterator {
         return m_done ? NULL : (dbCommon*)ent.precnode->precord;
     }
     const char *name() const {
-        return m_done ? NULL : ((dbCommon*)ent.precnode->precord)->name;
+        return m_done ? NULL : ent.precnode->recordname;
     }
     const char *info(const char *key, const char *def =0)
     {
@@ -225,7 +253,7 @@ struct DBManyLock
 {
     dbLocker *plock;
     DBManyLock() :plock(NULL) {}
-    DBManyLock(const std::vector<dbCommon*>& recs, unsigned flags)
+    DBManyLock(const std::vector<dbCommon*>& recs, unsigned flags=0)
         :plock(dbLockerAlloc((dbCommon**)&recs[0], recs.size(), flags))
     {
         if(!plock) throw std::invalid_argument("Failed to create locker");

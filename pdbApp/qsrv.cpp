@@ -1,5 +1,4 @@
 
-#include <epicsExport.h>
 #include <initHooks.h>
 #include <epicsExit.h>
 #include <epicsThread.h>
@@ -12,6 +11,7 @@
 #include <dbLock.h>
 #include <dbEvent.h>
 #include <epicsVersion.h>
+#include <dbNotify.h>
 
 #include <pv/reftrack.h>
 #include <pv/pvAccess.h>
@@ -20,6 +20,7 @@
 
 #define epicsExportSharedSymbols
 
+#include "pv/qsrv.h"
 #include "pvahelper.h"
 #include "pvif.h"
 #include "pdb.h"
@@ -27,6 +28,8 @@
 #ifdef USE_MULTILOCK
 #  include "pdbgroup.h"
 #endif
+
+#include <epicsExport.h>
 
 namespace pva = epics::pvAccess;
 
@@ -90,6 +93,16 @@ void QSRVRegistrar()
 }
 
 } // namespace
+
+unsigned qsrvVersion(void)
+{
+    return QSRV_VERSION_INT;
+}
+
+unsigned qsrvABIVersion(void)
+{
+    return QSRV_ABI_VERSION_INT;
+}
 
 extern "C" {
     epicsExportRegistrar(QSRVRegistrar);

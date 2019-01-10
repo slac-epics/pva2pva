@@ -10,11 +10,14 @@
 #include <epicsStdio.h>
 
 #include <dbAccess.h>
+#include <dbChannel.h>
+#include <dbStaticLib.h>
 #include <dbNotify.h>
 
 #include <dbEvent.h>
 
 #include <pv/pvAccess.h>
+#include <pv/configuration.h>
 
 #define epicsExportSharedSymbols
 #include "helper.h"
@@ -196,9 +199,9 @@ struct PDBProcessor
                 GroupConfig conf;
                 GroupConfig::parse(json, conf);
                 if(!conf.warning.empty())
-                    fprintf(stderr, "%s: warning(s) from info(Q:group, ...\n%s", rec.record()->name, conf.warning.c_str());
+                    fprintf(stderr, "%s: warning(s) from info(Q:group, ...\n%s", rec.name(), conf.warning.c_str());
 
-                recbase = rec.record()->name;
+                recbase = rec.name();
                 recbase += ".";
 
                 for(GroupConfig::groups_t::const_iterator git=conf.groups.begin(), gend=conf.groups.end();
@@ -583,8 +586,24 @@ pva::ChannelFind::shared_pointer
 PDBProvider::channelList(pva::ChannelListRequester::shared_pointer const & requester)
 {
     pva::ChannelFind::shared_pointer ret;
-    requester->channelListResult(pvd::Status(pvd::Status::STATUSTYPE_ERROR, "not supported"),
-                                 ret, pvd::PVStringArray::const_svector(), true);
+    pvd::PVStringArray::svector names;
+    for(pdbRecordIterator rec; !rec.done(); rec.next())
+    {
+        names.push_back(rec.name());
+    }
+    {
+        epicsGuard<epicsMutex> G(transient_pv_map.mutex());
+
+        for(persist_pv_map_t::const_iterator it=persist_pv_map.begin(), end=persist_pv_map.end();
+            it != end; ++it)
+        {
+            names.push_back(it->first);
+        }
+    }
+    // check for duplicates?
+    requester->channelListResult(pvd::Status::Ok,
+                                 shared_from_this(),
+                                 pvd::freeze(names), false);
     return ret;
 }
 

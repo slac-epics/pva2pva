@@ -1,6 +1,11 @@
 
 #include <epicsAtomic.h>
 
+#include <epicsTimer.h>
+#include <epicsMutex.h>
+#include <epicsGuard.h>
+#include <epicsEndian.h>
+
 #include <pv/iocshelper.h>
 
 #include <pv/pvAccess.h>
